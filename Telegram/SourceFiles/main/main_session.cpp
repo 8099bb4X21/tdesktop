@@ -9,6 +9,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include "apiwrap.h"
 #include "api/api_peer_colors.h"
+#include "noad_settings.h"
 #include "api/api_updates.h"
 #include "api/api_user_privacy.h"
 #include "main/main_account.h"
@@ -341,10 +342,16 @@ rpl::producer<> Session::downloaderTaskFinished() const {
 }
 
 bool Session::premium() const {
+	if (NoadSettings::LocalPremium()) {
+		return true;
+	}
 	return _user->isPremium();
 }
 
 bool Session::premiumPossible() const {
+	if (NoadSettings::LocalPremium()) {
+		return true;
+	}
 	return premium() || premiumCanBuy();
 }
 
@@ -355,12 +362,17 @@ bool Session::premiumBadgesShown() const {
 rpl::producer<bool> Session::premiumPossibleValue() const {
 	using namespace rpl::mappers;
 
-	auto premium = _user->flagsValue(
+	rpl::producer<bool> premium = _user->flagsValue(
 	) | rpl::filter([=](UserData::Flags::Change change) {
 		return (change.diff & UserDataFlag::Premium);
 	}) | rpl::map([=] {
 		return _user->isPremium();
 	});
+
+	if (NoadSettings::LocalPremium()) {
+		premium = rpl::single(true);
+	}
+
 	return rpl::combine(
 		std::move(premium),
 		_premiumPossible.value(),

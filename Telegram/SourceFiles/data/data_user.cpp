@@ -9,6 +9,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include "api/api_credits.h"
 #include "api/api_global_privacy.h"
+#include "noad_settings.h"
 #include "api/api_sensitive_content.h"
 #include "api/api_statistics.h"
 #include "api/api_text_entities.h"
@@ -603,6 +604,9 @@ bool UserData::isFake() const {
 }
 
 bool UserData::isPremium() const {
+	if (NoadSettings::LocalPremium()) {
+		return true;
+	}
 	return flags() & UserDataFlag::Premium;
 }
 

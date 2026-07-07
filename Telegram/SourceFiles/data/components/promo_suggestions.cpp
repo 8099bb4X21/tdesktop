@@ -10,6 +10,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "api/api_text_entities.h"
 #include "apiwrap.h"
 #include "base/unixtime.h"
+#include "noad_settings.h"
 #include "core/application.h"
 #include "core/core_settings.h"
 #include "data/data_changes.h"
@@ -130,7 +131,9 @@ void PromoSuggestions::refreshTopPromotion() {
 					|= _dismissedSuggestions.emplace(qs(suggestion)).second;
 			}
 
-			if (const auto peer = data.vpeer()) {
+			if (NoadSettings::DisableAds()) {
+				setTopPromoted(nullptr, QString(), QString());
+			} else if (const auto peer = data.vpeer()) {
 				const auto peerId = peerFromMTP(*peer);
 				const auto history = _session->data().history(peerId);
 				setTopPromoted(

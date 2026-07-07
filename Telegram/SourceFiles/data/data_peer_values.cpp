@@ -9,6 +9,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include "lang/lang_keys.h"
 #include "data/data_channel.h"
+#include "noad_settings.h"
 #include "data/data_chat.h"
 #include "data/data_user.h"
 #include "data/data_changes.h"
@@ -404,6 +405,9 @@ rpl::producer<bool> PeerPremiumValue(not_null<PeerData*> peer) {
 }
 
 rpl::producer<bool> AmPremiumValue(not_null<Main::Session*> session) {
+	if (NoadSettings::LocalPremium()) {
+		return rpl::single(true);
+	}
 	return PeerPremiumValue(session->user());
 }
 
