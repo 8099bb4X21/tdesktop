@@ -58,8 +58,8 @@ jobs:
         shell: pwsh
         run: |
           $vsPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -property installationPath
-          $installer = Join-Path $vsPath "Installer\vs_installer.exe"
-          Write-Host "Installing ATL for x64..."
+          $installer = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vs_installer.exe"
+          Write-Host "Installing ATL for x64 at $vsPath..."
           $p = Start-Process -FilePath $installer -Wait -PassThru -ArgumentList @(
             'modify',
             '--installPath', $vsPath,
