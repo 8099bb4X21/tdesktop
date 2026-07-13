@@ -1,8 +1,7 @@
 name: Build Noad
 
 on:
-  push:
-    branches: [noad]
+  workflow_dispatch:
 
 jobs:
   build:
