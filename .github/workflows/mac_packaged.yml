@@ -2,6 +2,7 @@ name: MacOS Packaged.
 
 on:
   push:
+    branches-ignore: [noad]
     paths-ignore:
       - 'docs/**'
       - '**.md'
