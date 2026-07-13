@@ -2,7 +2,7 @@ name: Build Noad
 
 on:
   push:
-    branches: [noad]
+    branches: [Noad]
   workflow_dispatch:
 
 jobs:
@@ -21,10 +21,9 @@ jobs:
     steps:
       - name: Prepare directories.
         run: |
-          mkdir %userprofile%\TBuild\Libraries
-          mklink /d %GITHUB_WORKSPACE%\TBuild %userprofile%\TBuild
-          echo TBUILD=%GITHUB_WORKSPACE%\TBuild>>%GITHUB_ENV%
-          echo LibrariesPath=%GITHUB_WORKSPACE%\TBuild\Libraries\win64>>%GITHUB_ENV%
+          mkdir C:\TBuild\Libraries
+          echo TBUILD=C:\TBuild>>%GITHUB_ENV%
+          echo LibrariesPath=C:\TBuild\Libraries\win64>>%GITHUB_ENV%
 
       - name: Get repository name.
         shell: bash
@@ -92,9 +91,17 @@ jobs:
           key: ${{ runner.OS }}-x64-qt-${{ env.CACHE_KEY }}
           restore-keys: ${{ runner.OS }}-x64-qt-
 
+      - name: Show disk space before Libraries.
+        shell: pwsh
+        run: Get-PSDrive C,D,E | Format-Table Name, @{N='Free(GB)';E={[math]::Round($_.Free/1GB,2)}}
+
       - name: Libraries.
         run: |
           %TBUILD%\%REPO_NAME%\Telegram\build\prepare\win.bat silent
+
+      - name: Show disk space after Libraries.
+        shell: pwsh
+        run: Get-PSDrive C,D,E | Format-Table Name, @{N='Free(GB)';E={[math]::Round($_.Free/1GB,2)}}
 
       - name: Free up some disk space.
         shell: bash
