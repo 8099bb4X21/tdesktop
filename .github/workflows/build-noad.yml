@@ -57,8 +57,27 @@ jobs:
       - name: Install ATL for x64.
         shell: pwsh
         run: |
-          $vsPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -property installationPath
-          $installer = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vs_installer.exe"
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vsPath = & $vswhere -property installationPath
+          Write-Host "VS installation path: $vsPath"
+          $installerCandidates = @(
+            (Join-Path (Split-Path $vswhere -Parent) "vs_installer.exe"),
+            (Join-Path $vsPath "Installer\vs_installer.exe"),
+            "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vs_installer.exe",
+            "C:\Program Files\Microsoft Visual Studio\Installer\vs_installer.exe"
+          )
+          $installer = $null
+          foreach ($candidate in $installerCandidates) {
+            if (Test-Path $candidate) {
+              $installer = $candidate
+              break
+            }
+          }
+          if (-not $installer) {
+            Write-Host "vs_installer.exe not found at any candidate path!"
+            exit 1
+          }
+          Write-Host "Installer path: $installer"
           Write-Host "Installing ATL for x64 at $vsPath..."
           $p = Start-Process -FilePath $installer -Wait -PassThru -ArgumentList @(
             'modify',
@@ -67,6 +86,7 @@ jobs:
             '--norestart',
             '--add', 'Microsoft.VisualStudio.Component.VC.ATL.x64'
           )
+          Write-Host "Installer exit code: $($p.ExitCode)"
           if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) { exit $p.ExitCode }
 
       - name: NuGet sources.
