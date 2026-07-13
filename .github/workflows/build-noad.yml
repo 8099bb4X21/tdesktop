@@ -21,9 +21,9 @@ jobs:
     steps:
       - name: Prepare directories.
         run: |
-          mkdir C:\TBuild\Libraries
-          echo TBUILD=C:\TBuild>>%GITHUB_ENV%
-          echo LibrariesPath=C:\TBuild\Libraries\win64>>%GITHUB_ENV%
+          mkdir %GITHUB_WORKSPACE%\TBuild\Libraries
+          echo TBUILD=%GITHUB_WORKSPACE%\TBuild>>%GITHUB_ENV%
+          echo LibrariesPath=%GITHUB_WORKSPACE%\TBuild\Libraries\win64>>%GITHUB_ENV%
 
       - name: Get repository name.
         shell: bash
@@ -93,7 +93,7 @@ jobs:
 
       - name: Show disk space before Libraries.
         shell: pwsh
-        run: Get-PSDrive C,D,E | Format-Table Name, @{N='Free(GB)';E={[math]::Round($_.Free/1GB,2)}}
+        run: Get-PSDrive C,D | Format-Table Name, @{N='Free(GB)';E={[math]::Round($_.Free/1GB,2)}}
 
       - name: Libraries.
         run: |
@@ -101,7 +101,7 @@ jobs:
 
       - name: Show disk space after Libraries.
         shell: pwsh
-        run: Get-PSDrive C,D,E | Format-Table Name, @{N='Free(GB)';E={[math]::Round($_.Free/1GB,2)}}
+        run: Get-PSDrive C,D | Format-Table Name, @{N='Free(GB)';E={[math]::Round($_.Free/1GB,2)}}
 
       - name: Free up some disk space.
         shell: bash
