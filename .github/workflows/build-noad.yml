@@ -122,21 +122,6 @@ jobs:
               LIBS_DIR="$(cygpath -u "$LibrariesPath")"
               mkdir -p "$LIBS_DIR"
               tar --zstd -xf "$TEMP_DIR/libs-release/${lib}.tar.zst" -C "$(dirname "$LIBS_DIR")"
-              if [ "$lib" = "libvpx" ]; then
-                # tg_owt expects libvpx headers/libs at $USED_PREFIX (local/),
-                # but download puts them at $LIBS_DIR/libvpx/.  Copy to local/
-                # so that tg_owt can find vpx/vp8cx.h etc.
-                DEST="$LIBS_DIR/local"
-                SRC="$LIBS_DIR/libvpx"
-                mkdir -p "$DEST/include" "$DEST/lib"
-                for hdr in "$SRC"/*.h; do
-                  [ -f "$hdr" ] && cp "$hdr" "$DEST/include/"
-                done
-                for dir in vpx vp8 vp9 vpx_dsp vpx_mem vpx_ports vpx_scale vpx_util; do
-                  [ -d "$SRC/$dir" ] && cp -r "$SRC/$dir" "$DEST/include/"
-                done
-                find "$SRC" -name '*.lib' -exec cp {} "$DEST/lib/" \;
-              fi
               echo "${lib}=hit" >> $GITHUB_OUTPUT
             else
               echo "${lib}=miss" >> $GITHUB_OUTPUT
@@ -159,7 +144,7 @@ jobs:
 
       - name: Free up some disk space.
         shell: bash
-        run:           find $LibrariesPath '(' '(' ! '(' -name '*.lib' -o -name '*.a' -o -name '*.exe' -o -name '*.h' -o -name '*.hpp' -o -name '*.inc' -o -name '*.cmake' -o -path '*/include/*' -o -path '*/objects-*' -o -path '*/cache_keys/*' -o -path '*/patches/*' ')' -type f ')' -o -empty ')' -delete
+        run:           find "$LibrariesPath" '(' '(' ! '(' -name '*.lib' -o -name '*.a' -o -name '*.exe' -o -name '*.h' -o -name '*.hpp' -o -name '*.inc' -o -name '*.cmake' -o -path '*/include/*' -o -path '*/objects-*' -o -path '*/cache_keys/*' -o -path '*/patches/*' ')' -type f ')' -o -empty ')' -delete
 
       - name: Upload rebuilt libraries to Release.
         shell: bash
@@ -172,7 +157,7 @@ jobs:
 
             TAG="${lib}-win-x64-${{ env.LIBS_CACHE_KEY }}"
 
-            if gh release view "$TAG" --repo ${{ env.LIBS_REPO }} --json body --jq '.body' 2>/dev/null | grep -q "stage_key: $STAGE_KEY"; then
+            if gh release view "$TAG" --repo ${{ env.LIBS_REPO }} --json body --jq '.body' 2>/dev/null | grep -qF "stage_key: $STAGE_KEY"; then
               echo "Release $TAG is up to date"
               continue
             fi
@@ -180,7 +165,18 @@ jobs:
             gh release delete "$TAG" --repo ${{ env.LIBS_REPO }} --yes 2>/dev/null || true
 
             cd "$(dirname "$LIBS_DIR")"
-            tar --zstd -cf "$TEMP_DIR/${lib}.tar.zst" win64/${lib}/ win64/cache_keys/${lib}
+            if [ "$lib" = "libvpx" ]; then
+              # libvpx: tg_owt references $USED_PREFIX (win64/local/), so
+              # include the make-installed artifacts in the tarball.
+              # (vpx.pc omitted: not needed by cmake and gets deleted by cleanup)
+              tar --zstd -cf "$TEMP_DIR/${lib}.tar.zst" \
+                win64/libvpx/ \
+                win64/local/include/vpx/ \
+                win64/local/lib/x64/ \
+                win64/cache_keys/${lib}
+            else
+              tar --zstd -cf "$TEMP_DIR/${lib}.tar.zst" win64/${lib}/ win64/cache_keys/${lib}
+            fi
 
             gh release create "$TAG" "$TEMP_DIR/${lib}.tar.zst" --repo ${{ env.LIBS_REPO }} --title "$TAG" --notes "stage_key: $STAGE_KEY"
             echo "Uploaded $TAG"
