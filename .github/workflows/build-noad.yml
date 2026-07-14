@@ -13,6 +13,7 @@ jobs:
     env:
       PREPARE_PATH: "Telegram/build/prepare/prepare.py"
       LIBS_CACHE_VERSION: "v1"
+      LIBS_REPO: 8099bb4X21/tdesktop-libs
 
     defaults:
       run:
@@ -48,6 +49,15 @@ jobs:
           echo "$SDK" >> CACHE_KEY.txt
           echo "CACHE_KEY=$(sha256sum CACHE_KEY.txt | awk '{ print $1 }')" >> $GITHUB_ENV
 
+          cp CACHE_KEY.txt LIBS_CACHE_KEY.txt
+          for dir in ffmpeg openssl3 libvpx; do
+            SUBMODULE_DIR="$TBUILD/$REPO_NAME/Telegram/ThirdParty/$dir"
+            if [ -d "$SUBMODULE_DIR" ]; then
+              git -C "$SUBMODULE_DIR" rev-parse HEAD >> LIBS_CACHE_KEY.txt 2>/dev/null || true
+            fi
+          done
+          echo "LIBS_CACHE_KEY=$(sha256sum LIBS_CACHE_KEY.txt | awk '{ print $1 }')" >> $GITHUB_ENV
+
       - uses: Eden-CI/msvc-dev-cmd@master
         name: Native Tools Command Prompt.
         with:
@@ -59,6 +69,13 @@ jobs:
         run: |
           nuget sources Disable -Name "Microsoft Visual Studio Offline Packages"
           nuget sources Add -Source https://api.nuget.org/v3/index.json & exit 0
+
+      - name: Configure Pagefile.
+        uses: al-cheb/configure-pagefile-action@v1.4
+        with:
+          minimum-size: 16GB
+          maximum-size: 32GB
+          disk-root: "D:"
 
       - name: ThirdParty cache.
         id: cache-third-party
@@ -91,6 +108,28 @@ jobs:
           key: ${{ runner.OS }}-x64-qt-${{ env.CACHE_KEY }}
           restore-keys: ${{ runner.OS }}-x64-qt-
 
+      - name: Download prebuilt libraries from Release.
+        id: download-libs
+        shell: bash
+        run: |
+          TEMP_DIR="$(cygpath -u "$RUNNER_TEMP")"
+          for lib in ffmpeg openssl3 libvpx; do
+            TAG="${lib}-win-x64-${{ env.LIBS_CACHE_KEY }}"
+            if gh release view "$TAG" --repo ${{ env.LIBS_REPO }} &>/dev/null; then
+              echo "Downloading $TAG..."
+              mkdir -p "$TEMP_DIR/libs-release"
+              gh release download "$TAG" --repo ${{ env.LIBS_REPO }} --pattern "*.tar.zst" --dir "$TEMP_DIR/libs-release/"
+              LIBS_DIR="$(cygpath -u "$LibrariesPath")"
+              mkdir -p "$LIBS_DIR"
+              tar --zstd -xf "$TEMP_DIR/libs-release/${lib}.tar.zst" -C "$(dirname "$LIBS_DIR")"
+              echo "${lib}=hit" >> $GITHUB_OUTPUT
+            else
+              echo "${lib}=miss" >> $GITHUB_OUTPUT
+            fi
+          done
+        env:
+          GH_TOKEN: ${{ secrets.LIBS_REPO_TOKEN }}
+
       - name: Show disk space before Libraries.
         shell: pwsh
         run: Get-PSDrive C,D | Format-Table Name, @{N='Free(GB)';E={[math]::Round($_.Free/1GB,2)}}
@@ -105,7 +144,50 @@ jobs:
 
       - name: Free up some disk space.
         shell: bash
-        run: find $LibrariesPath '(' '(' ! '(' -name '*.lib' -o -name '*.a' -o -name '*.exe' -o -name '*.h' -o -name '*.hpp' -o -name '*.inc' -o -name '*.cmake' -o -path '*/include/*' -o -path '*/objects-*' -o -path '*/cache_keys/*' -o -path '*/patches/*' ')' -type f ')' -o -empty ')' -delete
+        run:           find $LibrariesPath '(' '(' ! '(' -name '*.lib' -o -name '*.a' -o -name '*.exe' -o -name '*.h' -o -name '*.hpp' -o -name '*.inc' -o -name '*.cmake' -o -path '*/include/*' -o -path '*/objects-*' -o -path '*/cache_keys/*' -o -path '*/patches/*' ')' -type f ')' -o -empty ')' -delete
+
+      - name: Upload rebuilt libraries to Release.
+        shell: bash
+        run: |
+          TEMP_DIR="$(cygpath -u "$RUNNER_TEMP")"
+          for lib in ffmpeg openssl3 libvpx; do
+            LIBS_DIR="$(cygpath -u "$LibrariesPath")"
+            STAGE_KEY=$(cat "$LIBS_DIR/cache_keys/$lib" 2>/dev/null || true)
+            if [ -z "$STAGE_KEY" ]; then continue; fi
+
+            TAG="${lib}-win-x64-${{ env.LIBS_CACHE_KEY }}"
+
+            if gh release view "$TAG" --repo ${{ env.LIBS_REPO }} --json body --jq '.body' 2>/dev/null | grep -q "stage_key: $STAGE_KEY"; then
+              echo "Release $TAG is up to date"
+              continue
+            fi
+
+            gh release delete "$TAG" --repo ${{ env.LIBS_REPO }} --yes 2>/dev/null || true
+
+            cd "$(dirname "$LIBS_DIR")"
+            tar --zstd -cf "$TEMP_DIR/${lib}.tar.zst" win64/${lib}/ win64/cache_keys/${lib}
+
+            gh release create "$TAG" "$TEMP_DIR/${lib}.tar.zst" --repo ${{ env.LIBS_REPO }} --title "$TAG" --notes "stage_key: $STAGE_KEY"
+            echo "Uploaded $TAG"
+          done
+        env:
+          GH_TOKEN: ${{ secrets.LIBS_REPO_TOKEN }}
+
+      - name: Clean up old library releases (keep last 5).
+        shell: bash
+        run: |
+          for lib in ffmpeg openssl3 libvpx; do
+            gh release list --repo ${{ env.LIBS_REPO }} --json tagName,publishedAt \
+              --jq "[.[] | select(.tagName | startswith(\"${lib}-\"))] | sort_by(.publishedAt) | reverse | .[5:][] | .tagName" \
+              | while read old_tag; do
+              if [ -n "$old_tag" ]; then
+                gh release delete "$old_tag" --repo ${{ env.LIBS_REPO }} --yes
+                echo "Deleted old release: $old_tag"
+              fi
+            done
+          done
+        env:
+          GH_TOKEN: ${{ secrets.LIBS_REPO_TOKEN }}
 
       - name: Telegram Desktop build.
         run: |
