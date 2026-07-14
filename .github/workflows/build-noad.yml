@@ -122,6 +122,21 @@ jobs:
               LIBS_DIR="$(cygpath -u "$LibrariesPath")"
               mkdir -p "$LIBS_DIR"
               tar --zstd -xf "$TEMP_DIR/libs-release/${lib}.tar.zst" -C "$(dirname "$LIBS_DIR")"
+              if [ "$lib" = "libvpx" ]; then
+                # tg_owt expects libvpx headers/libs at $USED_PREFIX (local/),
+                # but download puts them at $LIBS_DIR/libvpx/.  Copy to local/
+                # so that tg_owt can find vpx/vp8cx.h etc.
+                DEST="$LIBS_DIR/local"
+                SRC="$LIBS_DIR/libvpx"
+                mkdir -p "$DEST/include" "$DEST/lib"
+                for hdr in "$SRC"/*.h; do
+                  [ -f "$hdr" ] && cp "$hdr" "$DEST/include/"
+                done
+                for dir in vpx vp8 vp9 vpx_dsp vpx_mem vpx_ports vpx_scale vpx_util; do
+                  [ -d "$SRC/$dir" ] && cp -r "$SRC/$dir" "$DEST/include/"
+                done
+                find "$SRC" -name '*.lib' -exec cp {} "$DEST/lib/" \;
+              fi
               echo "${lib}=hit" >> $GITHUB_OUTPUT
             else
               echo "${lib}=miss" >> $GITHUB_OUTPUT
