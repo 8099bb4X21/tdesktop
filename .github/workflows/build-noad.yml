@@ -205,7 +205,7 @@ jobs:
             -D DESKTOP_APP_LOTTIE_DISABLE_RECOLORING=ON
 
           set CL=/Zm1000 /wd4819
-          cmake --build ..\out --config Release --target Telegram /m:1
+          cmake --build ..\out --config Release --target Telegram --parallel 1
 
       - name: Upload artifact.
         uses: actions/upload-artifact@v7
