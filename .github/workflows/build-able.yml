@@ -137,6 +137,9 @@ jobs:
               LIBS_DIR="$(cygpath -u "$LibrariesPath")"
               mkdir -p "$LIBS_DIR"
               tar --zstd -xf "$TEMP_DIR/libs-release/${lib}.tar.zst" -C "$(dirname "$LIBS_DIR")"
+              if [ "$lib" = "qt" ]; then
+                mkdir -p "$LIBS_DIR/qt_${qt_ver}"
+              fi
               echo "${lib}=hit" >> $GITHUB_OUTPUT
             else
               echo "${lib}=miss" >> $GITHUB_OUTPUT
@@ -241,7 +244,7 @@ jobs:
             -D DESKTOP_APP_LOTTIE_DISABLE_RECOLORING=ON
 
           set CL=/Zm1000 /wd4819
-          cmake --build ..\out --config Release --target Telegram --parallel 1
+          cmake --build ..\out --config Release --target Telegram --parallel 2
 
       - name: Upload artifact.
         uses: actions/upload-artifact@v7
