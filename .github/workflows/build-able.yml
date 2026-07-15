@@ -67,6 +67,10 @@ jobs:
           tg_owt_ver=$(grep -A4 "stage('tg_owt'" "$PREPARE" | grep "git checkout" | awk '{print $3}' || true)
           printf '%s\n%s\n' "$SDK" "$tg_owt_ver" > per_lib_key.txt
           echo "tg_owt_key=$(sha256sum per_lib_key.txt | awk '{print $1}')" >> $GITHUB_ENV
+          qt_ver=$(grep -oP "QT.*=\s*'\K[^']+" "$TBUILD/$REPO_NAME/Telegram/build/qt_version.py" | tail -1)
+          printf '%s\n%s\n' "$SDK" "v${qt_ver}-lts-lgpl" > per_lib_key.txt
+          echo "qt_key=$(sha256sum per_lib_key.txt | awk '{print $1}')" >> $GITHUB_ENV
+          echo "qt_ver=$qt_ver" >> $GITHUB_ENV
 
       - uses: Eden-CI/msvc-dev-cmd@master
         name: Native Tools Command Prompt.
@@ -123,7 +127,7 @@ jobs:
         shell: bash
         run: |
           TEMP_DIR="$(cygpath -u "$RUNNER_TEMP")"
-          for lib in ffmpeg openssl3 libvpx tg_angle tg_owt; do
+          for lib in ffmpeg openssl3 libvpx tg_angle tg_owt qt; do
             key_var="${lib}_key"
             TAG="${lib}-win-x64-${!key_var}"
             if gh release view "$TAG" --repo ${{ env.LIBS_REPO }} &>/dev/null; then
@@ -155,15 +159,19 @@ jobs:
 
       - name: Free up some disk space.
         shell: bash
-        run:           find "$LibrariesPath" '(' '(' ! '(' -name '*.lib' -o -name '*.a' -o -name '*.exe' -o -name '*.h' -o -name '*.hpp' -o -name '*.inc' -o -name '*.cmake' -o -name '*.prl' -o -path '*/include/*' -o -path '*/objects-*' -o -path '*/cache_keys/*' -o -path '*/patches/*' ')' -type f ')' -o -empty ')' -delete
+        run:           find "$LibrariesPath" '(' '(' ! '(' -name '*.lib' -o -name '*.a' -o -name '*.exe' -o -name '*.h' -o -name '*.hpp' -o -name '*.inc' -o -name '*.cmake' -o -name '*.prl' -o -path '*/include/*' -o -path '*/objects-*' -o -path '*/cache_keys/*' -o -path '*/patches/*' -o -path '*/Qt[-_]*' ')' -type f ')' -o -empty ')' -delete
 
       - name: Upload rebuilt libraries to Release.
         shell: bash
         run: |
           TEMP_DIR="$(cygpath -u "$RUNNER_TEMP")"
-          for lib in ffmpeg openssl3 libvpx tg_angle tg_owt; do
+          for lib in ffmpeg openssl3 libvpx tg_angle tg_owt qt; do
             LIBS_DIR="$(cygpath -u "$LibrariesPath")"
-            STAGE_KEY=$(cat "$LIBS_DIR/cache_keys/$lib" 2>/dev/null || true)
+            if [ "$lib" = "qt" ]; then
+              STAGE_KEY=$(cat "$LIBS_DIR/cache_keys/qt_${qt_ver}" 2>/dev/null || true)
+            else
+              STAGE_KEY=$(cat "$LIBS_DIR/cache_keys/$lib" 2>/dev/null || true)
+            fi
             if [ -z "$STAGE_KEY" ]; then continue; fi
 
             key_var="${lib}_key"
@@ -186,6 +194,11 @@ jobs:
                 win64/local/include/vpx/ \
                 win64/local/lib/x64/ \
                 win64/cache_keys/${lib}
+            elif [ "$lib" = "qt" ]; then
+              # Qt: version-dependent install directory and cache_keys file
+              tar --zstd -cf "$TEMP_DIR/${lib}.tar.zst" \
+                win64/Qt-${qt_ver}/ \
+                win64/cache_keys/qt_${qt_ver}
             else
               tar --zstd -cf "$TEMP_DIR/${lib}.tar.zst" win64/${lib}/ win64/cache_keys/${lib}
             fi
@@ -199,7 +212,7 @@ jobs:
       - name: Clean up old library releases (keep last 5).
         shell: bash
         run: |
-          for lib in ffmpeg openssl3 libvpx tg_angle tg_owt; do
+          for lib in ffmpeg openssl3 libvpx tg_angle tg_owt qt; do
             gh release list --repo ${{ env.LIBS_REPO }} --json tagName,publishedAt \
               --jq "[.[] | select(.tagName | startswith(\"${lib}-\"))] | sort_by(.publishedAt) | reverse | .[5:][] | .tagName" \
               | while read old_tag; do
