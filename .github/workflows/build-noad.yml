@@ -49,16 +49,20 @@ jobs:
           echo "$SDK" >> CACHE_KEY.txt
           echo "CACHE_KEY=$(sha256sum CACHE_KEY.txt | awk '{ print $1 }')" >> $GITHUB_ENV
 
-          # Per-lib cache keys: sha256(SDK + lib_source_hash)
-          for dir in ffmpeg openssl3 libvpx; do
-            SUBMODULE_DIR="$TBUILD/$REPO_NAME/Telegram/ThirdParty/$dir"
-            source_hash=$(git -C "$SUBMODULE_DIR" rev-parse HEAD 2>/dev/null || true)
-            printf '%s\n%s\n' "$SDK" "$source_hash" > per_lib_key.txt
-            key=$(sha256sum per_lib_key.txt | awk '{print $1}')
-            echo "${dir}_key=$key" >> $GITHUB_ENV
-          done
-          tg_source_hash=$(grep -A4 "stage('tg_angle'" "$TBUILD/$REPO_NAME/$PREPARE_PATH" | grep "git checkout" | awk '{print $3}' || true)
-          printf '%s\n%s\n' "$SDK" "$tg_source_hash" > per_lib_key.txt
+          # Per-lib cache keys: sha256(SDK + lib_version_tag)
+          # lib_version_tag extracted from prepare.py stage definitions
+          PREPARE="$TBUILD/$REPO_NAME/$PREPARE_PATH"
+          ffmpeg_ver=$(grep -A5 "stage('ffmpeg'" "$PREPARE" | grep "git clone -b" | sed 's/.*-b //;s/ .*//' || true)
+          printf '%s\n%s\n' "$SDK" "$ffmpeg_ver" > per_lib_key.txt
+          echo "ffmpeg_key=$(sha256sum per_lib_key.txt | awk '{print $1}')" >> $GITHUB_ENV
+          openssl3_ver=$(grep -A5 "stage('openssl3'" "$PREPARE" | grep "git clone -b" | sed 's/.*-b //;s/ .*//' || true)
+          printf '%s\n%s\n' "$SDK" "$openssl3_ver" > per_lib_key.txt
+          echo "openssl3_key=$(sha256sum per_lib_key.txt | awk '{print $1}')" >> $GITHUB_ENV
+          libvpx_ver=$(grep -A8 "stage('libvpx'" "$PREPARE" | grep "git checkout" | awk '{print $3}' || true)
+          printf '%s\n%s\n' "$SDK" "$libvpx_ver" > per_lib_key.txt
+          echo "libvpx_key=$(sha256sum per_lib_key.txt | awk '{print $1}')" >> $GITHUB_ENV
+          tg_angle_ver=$(grep -A4 "stage('tg_angle'" "$PREPARE" | grep "git checkout" | awk '{print $3}' || true)
+          printf '%s\n%s\n' "$SDK" "$tg_angle_ver" > per_lib_key.txt
           echo "tg_angle_key=$(sha256sum per_lib_key.txt | awk '{print $1}')" >> $GITHUB_ENV
 
       - uses: Eden-CI/msvc-dev-cmd@master
