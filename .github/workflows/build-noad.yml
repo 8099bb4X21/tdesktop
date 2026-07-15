@@ -49,15 +49,17 @@ jobs:
           echo "$SDK" >> CACHE_KEY.txt
           echo "CACHE_KEY=$(sha256sum CACHE_KEY.txt | awk '{ print $1 }')" >> $GITHUB_ENV
 
-          cp CACHE_KEY.txt LIBS_CACHE_KEY.txt
+          # Per-lib cache keys: sha256(SDK + lib_source_hash)
           for dir in ffmpeg openssl3 libvpx; do
             SUBMODULE_DIR="$TBUILD/$REPO_NAME/Telegram/ThirdParty/$dir"
-            if [ -d "$SUBMODULE_DIR" ]; then
-              git -C "$SUBMODULE_DIR" rev-parse HEAD >> LIBS_CACHE_KEY.txt 2>/dev/null || true
-            fi
+            source_hash=$(git -C "$SUBMODULE_DIR" rev-parse HEAD 2>/dev/null || true)
+            printf '%s\n%s\n' "$SDK" "$source_hash" > per_lib_key.txt
+            key=$(sha256sum per_lib_key.txt | awk '{print $1}')
+            echo "${dir}_key=$key" >> $GITHUB_ENV
           done
-          grep -A4 "stage('tg_angle'" "$TBUILD/$REPO_NAME/$PREPARE_PATH" | grep "git checkout" | awk '{print $3}' >> LIBS_CACHE_KEY.txt || true
-          echo "LIBS_CACHE_KEY=$(sha256sum LIBS_CACHE_KEY.txt | awk '{ print $1 }')" >> $GITHUB_ENV
+          tg_source_hash=$(grep -A4 "stage('tg_angle'" "$TBUILD/$REPO_NAME/$PREPARE_PATH" | grep "git checkout" | awk '{print $3}' || true)
+          printf '%s\n%s\n' "$SDK" "$tg_source_hash" > per_lib_key.txt
+          echo "tg_angle_key=$(sha256sum per_lib_key.txt | awk '{print $1}')" >> $GITHUB_ENV
 
       - uses: Eden-CI/msvc-dev-cmd@master
         name: Native Tools Command Prompt.
@@ -115,7 +117,8 @@ jobs:
         run: |
           TEMP_DIR="$(cygpath -u "$RUNNER_TEMP")"
           for lib in ffmpeg openssl3 libvpx tg_angle; do
-            TAG="${lib}-win-x64-${{ env.LIBS_CACHE_KEY }}"
+            key_var="${lib}_key"
+            TAG="${lib}-win-x64-${!key_var}"
             if gh release view "$TAG" --repo ${{ env.LIBS_REPO }} &>/dev/null; then
               echo "Downloading $TAG..."
               mkdir -p "$TEMP_DIR/libs-release"
@@ -156,7 +159,8 @@ jobs:
             STAGE_KEY=$(cat "$LIBS_DIR/cache_keys/$lib" 2>/dev/null || true)
             if [ -z "$STAGE_KEY" ]; then continue; fi
 
-            TAG="${lib}-win-x64-${{ env.LIBS_CACHE_KEY }}"
+            key_var="${lib}_key"
+            TAG="${lib}-win-x64-${!key_var}"
 
             if gh release view "$TAG" --repo ${{ env.LIBS_REPO }} --json body --jq '.body' 2>/dev/null | grep -qF "stage_key: $STAGE_KEY"; then
               echo "Release $TAG is up to date"
