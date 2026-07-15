@@ -56,6 +56,7 @@ jobs:
               git -C "$SUBMODULE_DIR" rev-parse HEAD >> LIBS_CACHE_KEY.txt 2>/dev/null || true
             fi
           done
+          grep -A3 "stage('tg_angle'" "$TBUILD/$REPO_NAME/$PREPARE_PATH" | grep "git checkout" | awk '{print $3}' >> LIBS_CACHE_KEY.txt
           echo "LIBS_CACHE_KEY=$(sha256sum LIBS_CACHE_KEY.txt | awk '{ print $1 }')" >> $GITHUB_ENV
 
       - uses: Eden-CI/msvc-dev-cmd@master
@@ -113,7 +114,7 @@ jobs:
         shell: bash
         run: |
           TEMP_DIR="$(cygpath -u "$RUNNER_TEMP")"
-          for lib in ffmpeg openssl3 libvpx; do
+          for lib in ffmpeg openssl3 libvpx tg_angle; do
             TAG="${lib}-win-x64-${{ env.LIBS_CACHE_KEY }}"
             if gh release view "$TAG" --repo ${{ env.LIBS_REPO }} &>/dev/null; then
               echo "Downloading $TAG..."
@@ -150,7 +151,7 @@ jobs:
         shell: bash
         run: |
           TEMP_DIR="$(cygpath -u "$RUNNER_TEMP")"
-          for lib in ffmpeg openssl3 libvpx; do
+          for lib in ffmpeg openssl3 libvpx tg_angle; do
             LIBS_DIR="$(cygpath -u "$LibrariesPath")"
             STAGE_KEY=$(cat "$LIBS_DIR/cache_keys/$lib" 2>/dev/null || true)
             if [ -z "$STAGE_KEY" ]; then continue; fi
@@ -187,7 +188,7 @@ jobs:
       - name: Clean up old library releases (keep last 5).
         shell: bash
         run: |
-          for lib in ffmpeg openssl3 libvpx; do
+          for lib in ffmpeg openssl3 libvpx tg_angle; do
             gh release list --repo ${{ env.LIBS_REPO }} --json tagName,publishedAt \
               --jq "[.[] | select(.tagName | startswith(\"${lib}-\"))] | sort_by(.publishedAt) | reverse | .[5:][] | .tagName" \
               | while read old_tag; do
