@@ -64,6 +64,9 @@ jobs:
           tg_angle_ver=$(grep -A4 "stage('tg_angle'" "$PREPARE" | grep "git checkout" | awk '{print $3}' || true)
           printf '%s\n%s\n' "$SDK" "$tg_angle_ver" > per_lib_key.txt
           echo "tg_angle_key=$(sha256sum per_lib_key.txt | awk '{print $1}')" >> $GITHUB_ENV
+          tg_owt_ver=$(grep -A4 "stage('tg_owt'" "$PREPARE" | grep "git checkout" | awk '{print $3}' || true)
+          printf '%s\n%s\n' "$SDK" "$tg_owt_ver" > per_lib_key.txt
+          echo "tg_owt_key=$(sha256sum per_lib_key.txt | awk '{print $1}')" >> $GITHUB_ENV
 
       - uses: Eden-CI/msvc-dev-cmd@master
         name: Native Tools Command Prompt.
@@ -120,7 +123,7 @@ jobs:
         shell: bash
         run: |
           TEMP_DIR="$(cygpath -u "$RUNNER_TEMP")"
-          for lib in ffmpeg openssl3 libvpx tg_angle; do
+          for lib in ffmpeg openssl3 libvpx tg_angle tg_owt; do
             key_var="${lib}_key"
             TAG="${lib}-win-x64-${!key_var}"
             if gh release view "$TAG" --repo ${{ env.LIBS_REPO }} &>/dev/null; then
@@ -152,13 +155,13 @@ jobs:
 
       - name: Free up some disk space.
         shell: bash
-        run:           find "$LibrariesPath" '(' '(' ! '(' -name '*.lib' -o -name '*.a' -o -name '*.exe' -o -name '*.h' -o -name '*.hpp' -o -name '*.inc' -o -name '*.cmake' -o -path '*/include/*' -o -path '*/objects-*' -o -path '*/cache_keys/*' -o -path '*/patches/*' ')' -type f ')' -o -empty ')' -delete
+        run:           find "$LibrariesPath" '(' '(' ! '(' -name '*.lib' -o -name '*.a' -o -name '*.exe' -o -name '*.h' -o -name '*.hpp' -o -name '*.inc' -o -name '*.cmake' -o -name '*.prl' -o -path '*/include/*' -o -path '*/objects-*' -o -path '*/cache_keys/*' -o -path '*/patches/*' ')' -type f ')' -o -empty ')' -delete
 
       - name: Upload rebuilt libraries to Release.
         shell: bash
         run: |
           TEMP_DIR="$(cygpath -u "$RUNNER_TEMP")"
-          for lib in ffmpeg openssl3 libvpx tg_angle; do
+          for lib in ffmpeg openssl3 libvpx tg_angle tg_owt; do
             LIBS_DIR="$(cygpath -u "$LibrariesPath")"
             STAGE_KEY=$(cat "$LIBS_DIR/cache_keys/$lib" 2>/dev/null || true)
             if [ -z "$STAGE_KEY" ]; then continue; fi
@@ -196,7 +199,7 @@ jobs:
       - name: Clean up old library releases (keep last 5).
         shell: bash
         run: |
-          for lib in ffmpeg openssl3 libvpx tg_angle; do
+          for lib in ffmpeg openssl3 libvpx tg_angle tg_owt; do
             gh release list --repo ${{ env.LIBS_REPO }} --json tagName,publishedAt \
               --jq "[.[] | select(.tagName | startswith(\"${lib}-\"))] | sort_by(.publishedAt) | reverse | .[5:][] | .tagName" \
               | while read old_tag; do
